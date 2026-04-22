@@ -6,7 +6,7 @@ name: Daily Dinner Generator
 on:
   schedule:
     # 13:00 UTC = 14:00 SEČ (15:00 SELČ v létě – uprav dle potřeby)
-    - cron: '0 13 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch: # Možnost spustit ručně z GitHub UI
 
 jobs:
