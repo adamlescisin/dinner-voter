@@ -1,17 +1,16 @@
-// app/vote/[token]/page.tsx
-// Hlasovací stránka – otevře se z odkazu v emailu
-
 import { prisma } from '@/lib/prisma'
 import { notFound, redirect } from 'next/navigation'
 import VoteClient from './VoteClient'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
 export default async function VotePage({ params }: Props) {
+  const { token } = await params
+
   const vote = await prisma.vote.findUnique({
-    where: { voteToken: params.token },
+    where: { voteToken: token },
     include: {
       session: true,
       member: true
@@ -20,7 +19,6 @@ export default async function VotePage({ params }: Props) {
 
   if (!vote) notFound()
 
-  // Pokud již hlasoval, přesměruj na výsledky
   if (vote.votedAt) {
     redirect(`/results/${vote.session.id}?voted=1`)
   }
@@ -33,7 +31,7 @@ export default async function VotePage({ params }: Props) {
 
   return (
     <VoteClient
-      token={params.token}
+      token={token}
       memberName={vote.member.name}
       sessionId={vote.session.id}
       proposals={proposals}

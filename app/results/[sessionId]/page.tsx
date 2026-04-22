@@ -2,17 +2,20 @@
 // Výsledková stránka – živé hlasy + vítěz
 
 import { prisma } from '@/lib/prisma'
-import { notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'  
 
 interface Props {
-  params: { sessionId: string }
-  searchParams: { voted?: string; name?: string }
+  params: Promise<{ sessionId: string }>
+  searchParams: Promise<{ voted?: string; name?: string }>
 }
+
+export default async function ResultsPage({ params, searchParams }: Props) {
+  const { sessionId: sessionIdStr } = await params
+  const { voted, name } = await searchParams
+  const sessionId = parseInt(sessionIdStr)
 
 export const revalidate = 10 // Obnoví každých 10 sekund
 
-export default async function ResultsPage({ params, searchParams }: Props) {
-  const sessionId = parseInt(params.sessionId)
   if (isNaN(sessionId)) notFound()
 
   const session = await prisma.votingSession.findUnique({
@@ -58,8 +61,8 @@ export default async function ResultsPage({ params, searchParams }: Props) {
     weekday: 'long', day: 'numeric', month: 'long'
   })
 
-  const justVoted = searchParams.voted === '1'
-  const voterName = searchParams.name
+  const justVoted = voted === '1'
+  const voterName = name
 
   return (
     <div style={{ maxWidth: 440, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
