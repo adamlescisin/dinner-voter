@@ -1,118 +1,124 @@
-// app/page.tsx
-import Link from 'next/link'
+// app/history/page.tsx
 import { prisma } from '@/lib/prisma'
+import Link from 'next/link'
 
 export const revalidate = 60
 
-export default async function HomePage() {
-  const todaySession = await prisma.votingSession.findFirst({
+export default async function HistoryPage() {
+  const sessions = await prisma.votingSession.findMany({
     orderBy: { sessionDate: 'desc' },
     include: {
       votes: {
-        where: { votedAt: { not: null } }
+        where: { votedAt: { not: null } },
+        include: { member: true }
       }
     }
   })
 
-  const proposals = todaySession ? (() => {
-    try { return JSON.parse(todaySession.proposals as unknown as string) as any[] }
-    catch { return [] }
-  })() : []
+  const byMonth: Record<string, typeof sessions> = {}
+  for (const session of sessions) {
+    const key = new Date(session.sessionDate).toLocaleDateString('cs-CZ', {
+      year: 'numeric', month: 'long'
+    })
+    if (!byMonth[key]) byMonth[key] = []
+    byMonth[key].push(session)
+  }
 
-  const votedCount = todaySession?.votes.length ?? 0
-  const isToday = todaySession && new Date(todaySession.sessionDate).toDateString() === new Date().toDateString()
+  const winnerCounts: Record<string, number> = {}
+  for (const session of sessions) {
+    if (session.winnerName) {
+      winnerCounts[session.winnerName] = (winnerCounts[session.winnerName] || 0) + 1
+    }
+  }
+  const topWinners = Object.entries(winnerCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
 
   return (
-    <div style={{ maxWidth: 440, margin: '0 auto', padding: '48px 16px', fontFamily: 'system-ui, sans-serif' }}>
-
-      {/* Hero */}
-      <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>🍽️</div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0 0 8px' }}>Co k večeři?</h1>
-        <p style={{ color: '#666', fontSize: 16, margin: 0 }}>
-          Rodinné hlasování o večeři
-        </p>
+    <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px' }}>📅 Historie hlasování</h1>
+        <p style={{ color: '#666', fontSize: 14, margin: 0 }}>{sessions.length} dní celkem</p>
       </div>
 
-      {/* Dnešní stav */}
-      {isToday ? (
-        <div style={{
-          background: '#f7f7f7', borderRadius: 16, padding: '20px',
-          marginBottom: 24, textAlign: 'center'
-        }}>
-          <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>Dnešní hlasování</div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            {proposals.map((p: any, i: number) => (
-              <span key={i} style={{
-                background: '#fff', border: '1.5px solid #e5e5e5',
-                borderRadius: 8, padding: '6px 10px', fontSize: 13
-              }}>
-                {p.emoji} {p.name}
+      {topWinners.length > 0 && (
+        <div style={{ background: '#f7f7f7', borderRadius: 14, padding: '16px', marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#888', marginBottom: 12 }}>🏆 Nejoblíbenější jídla</div>
+          {topWinners.map(([name, count], i) => (
+            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 16, minWidth: 24 }}>
+                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
               </span>
-            ))}
-          </div>
-          <div style={{ fontSize: 14, color: '#666' }}>
-            {votedCount}/4 hlasů · {todaySession!.status === 'open' ? '⏳ probíhá' : '✅ uzavřeno'}
-          </div>
-          {todaySession!.winnerName && (
-            <div style={{
-              marginTop: 12, background: '#1a1a1a', color: '#fff',
-              borderRadius: 10, padding: '10px 16px', fontSize: 15, fontWeight: 600
-            }}>
-              🏆 {todaySession!.winnerName}
+              <div style={{ flex: 1, fontWeight: 500, fontSize: 14 }}>{name}</div>
+              <div style={{ fontSize: 13, color: '#888' }}>{count}× vyhrálo</div>
+              <div style={{ width: 60, background: '#e5e5e5', borderRadius: 3, height: 4 }}>
+                <div style={{
+                  width: `${Math.round((count / topWinners[0][1]) * 100)}%`,
+                  background: '#1a1a1a', borderRadius: 3, height: 4
+                }}/>
+              </div>
             </div>
-          )}
-          <Link href={`/results/${todaySession!.id}`} style={{
-            display: 'block', marginTop: 12, color: '#666', fontSize: 13, textDecoration: 'none'
-          }}>
-            Zobrazit výsledky →
-          </Link>
-        </div>
-      ) : (
-        <div style={{
-          background: '#f7f7f7', borderRadius: 16, padding: '20px',
-          marginBottom: 24, textAlign: 'center', color: '#999'
-        }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>⏰</div>
-          <div style={{ fontSize: 14 }}>Dnešní hlasování ještě nezačalo</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Email přijde ve 14:00</div>
+          ))}
         </div>
       )}
 
-      {/* Navigace */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Link href="/history" style={{ textDecoration: 'none' }}>
+      {Object.entries(byMonth).map(([month, monthSessions]) => (
+        <div key={month} style={{ marginBottom: 32 }}>
           <div style={{
-            border: '1.5px solid #e5e5e5', borderRadius: 14, padding: '16px 18px',
-            display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer'
+            fontSize: 13, fontWeight: 600, color: '#888', textTransform: 'uppercase',
+            letterSpacing: '0.05em', marginBottom: 12, paddingBottom: 8,
+            borderBottom: '1px solid #eee'
           }}>
-            <span style={{ fontSize: 24 }}>📅</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>Historie hlasování</div>
-              <div style={{ fontSize: 13, color: '#888' }}>Archiv a nejoblíbenější jídla</div>
-            </div>
-            <span style={{ color: '#ccc', fontSize: 18 }}>›</span>
+            {month}
           </div>
-        </Link>
+          {monthSessions.map(session => {
+            const proposals = (() => {
+              try { return JSON.parse(session.proposals as unknown as string) as any[] }
+              catch { return [] }
+            })()
+            const date = new Date(session.sessionDate).toLocaleDateString('cs-CZ', {
+              weekday: 'short', day: 'numeric', month: 'numeric'
+            })
+            const votedCount = session.votes.length
+            return (
+              <Link key={session.id} href={`/results/${session.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{
+                  border: '1.5px solid #e5e5e5', borderRadius: 12,
+                  padding: '12px 14px', marginBottom: 8, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 12
+                }}>
+                  <div style={{ minWidth: 52, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: '#999' }}>{date.split(' ')[0]}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{date.split(' ')[1]}</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    {session.winnerName ? (
+                      <div style={{ fontWeight: 600, fontSize: 15 }}>
+                        {proposals.find((p: any) => p.name === session.winnerName)?.emoji || '🍽️'} {session.winnerName}
+                      </div>
+                    ) : (
+                      <div style={{ color: '#999', fontSize: 14 }}>
+                        {session.status === 'open' ? '⏳ Probíhá hlasování' : 'Bez vítěze'}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                      {votedCount}/4 hlasů{session.status === 'open' && votedCount < 4 && ' · stále otevřeno'}
+                    </div>
+                  </div>
+                  <div style={{ color: '#ccc', fontSize: 18 }}>›</div>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      ))}
 
-        <Link href="/admin" style={{ textDecoration: 'none' }}>
-          <div style={{
-            border: '1.5px solid #e5e5e5', borderRadius: 14, padding: '16px 18px',
-            display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer'
-          }}>
-            <span style={{ fontSize: 24 }}>⚙️</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>Admin</div>
-              <div style={{ fontSize: 13, color: '#888' }}>Správa hlasování a členů</div>
-            </div>
-            <span style={{ color: '#ccc', fontSize: 18 }}>›</span>
-          </div>
-        </Link>
-      </div>
-
-      <div style={{ textAlign: 'center', marginTop: 40, fontSize: 12, color: '#ccc' }}>
-        Powered by Claude AI
-      </div>
+      {sessions.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#999', padding: '48px 0' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🍽️</div>
+          <div>Zatím žádná hlasování</div>
+        </div>
+      )}
     </div>
   )
 }
