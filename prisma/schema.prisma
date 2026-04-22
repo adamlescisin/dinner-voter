@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(50)
+  email     String   @unique(map: "email") @db.VarChar(100)
+  likes     String   @db.LongText
+  dislikes  String   @db.LongText
+  allergies String   @db.LongText
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(0)
+  votes     Vote[]
+
+  @@map("members")
+}
+
+model VotingSession {
+  id          Int       @id @default(autoincrement())
+  sessionDate DateTime  @unique(map: "session_date") @map("session_date") @db.Date
+  proposals   String    @db.LongText
+  status      Status    @default(open)
+  winnerName  String?   @map("winner_name") @db.VarChar(100)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  closedAt    DateTime? @map("closed_at") @db.DateTime(0)
+  votes       Vote[]
+
+  @@index([sessionDate], map: "idx_sessions_date")
+  @@map("voting_sessions")
+}
+
+model Vote {
+  id            Int           @id @default(autoincrement())
+  sessionId     Int           @map("session_id")
+  memberId      Int           @map("member_id")
+  proposalIndex Int?          @map("proposal_index") @db.TinyInt
+  customDish    String?       @map("custom_dish") @db.VarChar(200)
+  voteToken     String        @unique(map: "vote_token") @map("vote_token") @db.VarChar(64)
+  votedAt       DateTime?     @map("voted_at") @db.DateTime(0)
+  session       VotingSession @relation(fields: [sessionId], references: [id], onUpdate: Restrict, map: "votes_ibfk_1")
+  member        Member        @relation(fields: [memberId], references: [id], onUpdate: Restrict, map: "votes_ibfk_2")
+
+  @@unique([sessionId, memberId], map: "unique_vote")
+  @@index([sessionId], map: "idx_votes_session")
+  @@index([voteToken], map: "idx_votes_token")
+  @@index([memberId], map: "member_id")
+  @@map("votes")
+}
+
+enum Status {
+  open
+  closed
+}
