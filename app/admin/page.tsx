@@ -41,8 +41,14 @@ export default async function AdminPage() {
     name: m.name,
     email: m.email,
     active: m.active,
-    likes: (m.likes as unknown) as string[],
-    dislikes: (m.dislikes as unknown) as string[]
+    likes: (() => {
+      try { return JSON.parse(m.likes as unknown as string) as string[] }
+      catch { return [] }
+    })(),
+    dislikes: (() => {
+      try { return JSON.parse(m.dislikes as unknown as string) as string[] }
+      catch { return [] }
+    })()
   }))
 
   return <AdminClient sessions={sessionsData} members={membersData} />
